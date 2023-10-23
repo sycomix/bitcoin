@@ -26,7 +26,12 @@ class Pool(object):
 
   def sendresult(self, job, nonce):
     self.miner.log("Found share: %s:%s:%s:%s\n" % (self.name, binascii.hexlify(job.state), binascii.hexlify(job.data[64:76]), binascii.hexlify(nonce)), self.miner.green)
-    uploader = threading.Thread(None, self.uploadresult, self.name + "_uploadresult_" + binascii.hexlify(nonce), (job, nonce))
+    uploader = threading.Thread(
+        None,
+        self.uploadresult,
+        f"{self.name}_uploadresult_{binascii.hexlify(nonce)}",
+        (job, nonce),
+    )
     uploader.daemon = True
     uploader.start()
 
@@ -37,10 +42,16 @@ class Pool(object):
         try:
           conn = httplib.HTTPConnection(s.host, s.port, True, self.sendsharetimeout)
           req = json.dumps({"method": "getwork", "params": [binascii.hexlify(job.data[:76] + nonce + job.data[80:])], "id": 0})
-          headers = {"User-Agent": "PyFPGAMiner " + miner.version, "Content-type": "application/json", "Content-Length": len(req), "Authorization": self.auth}
+          headers = {
+              "User-Agent": f"PyFPGAMiner {miner.version}",
+              "Content-type": "application/json",
+              "Content-Length": len(req),
+              "Authorization": self.auth,
+          }
           conn.request("POST", s.path, req, headers)
           response = json.loads(conn.getresponse().read())
-          if response["error"] != None: raise Exception("Server reported error: %s" % response["error"])
+          if response["error"] != None:
+            raise Exception(f'Server reported error: {response["error"]}')
           if response["result"]:
             self.miner.log("%s accepted share %s\n" % (self.name, binascii.hexlify(nonce)), curses.A_BOLD | self.miner.green)
             self.accepted = self.accepted + 1
@@ -66,7 +77,12 @@ class Pool(object):
           self.requests = self.requests + 1
           conn = httplib.HTTPConnection(s.host, s.port, True, self.getworktimeout)
           req = json.dumps({"method": "getwork", "params": [], "id": 0})
-          headers = {"User-Agent": "PyFPGAMiner " + miner.version, "Content-type": "application/json", "Content-Length": len(req), "Authorization": self.auth}
+          headers = {
+              "User-Agent": f"PyFPGAMiner {miner.version}",
+              "Content-type": "application/json",
+              "Content-Length": len(req),
+              "Authorization": self.auth,
+          }
           conn.request("POST", s.path, req, headers)
           response = conn.getresponse()
           if not self.longpolling:
@@ -75,17 +91,23 @@ class Pool(object):
               if h[0] == "x-long-polling":
                 url = h[1]
                 try:
-                  if url[0] == "/": url = "http://" + s.host + ":" + str(s.port) + url
+                  if url[0] == "/":
+                    url = f"http://{s.host}:{str(s.port)}{url}"
                   if url[:7] != "http://": raise Exception()
                   parts = url[7:].split("/", 2)
-                  path = "/" + parts[1]
+                  path = f"/{parts[1]}"
                   parts = parts[0].split(":")
                   if len(parts) != 2: raise Exception()
                   host = parts[0]
                   port = parts[1]
                   self.miner.log("Found long polling URL for %s: %s\n" % (self.name, url), self.miner.green)
                   self.longpolling = True
-                  self.longpollingthread = threading.Thread(None, self.longpollingworker, self.name + "_longpolling", (host, port, path))
+                  self.longpollingthread = threading.Thread(
+                      None,
+                      self.longpollingworker,
+                      f"{self.name}_longpolling",
+                      (host, port, path),
+                  )
                   self.longpollingthread.daemon = True
                   self.longpollingthread.start()
                 except:
@@ -110,7 +132,10 @@ class Pool(object):
     while True:
       try:
         conn = httplib.HTTPConnection(host, port, True, self.longpolltimeout)
-        headers = {"User-Agent": "PyFPGAMiner " + miner.version, "Authorization": self.auth}
+        headers = {
+            "User-Agent": f"PyFPGAMiner {miner.version}",
+            "Authorization": self.auth,
+        }
         conn.request("GET", path, None, headers)
         response = json.loads(conn.getresponse().read())
         self.miner.log("Long polling: %s indicates that a new block was found\n" % self.name, curses.A_BOLD)
@@ -147,7 +172,7 @@ class Miner(object):
     self.conlock.acquire()
     self.logfile.write(str)
     self.logfile.flush()
-    for i in range(5):
+    for _ in range(5):
       try:
         self.logwin.addstr(str, attr)
         self.logwin.refresh()
@@ -172,7 +197,7 @@ class Miner(object):
     (my, mx) = self.statuswin.getmaxyx()
     self.statuswin.hline(1, 0, curses.ACS_HLINE, mx)
     self.statuswin.hline(my - 1, 0, curses.ACS_HLINE, mx)
-    versionstr = "PyFPGAMiner v. " + self.version
+    versionstr = f"PyFPGAMiner v. {self.version}"
     self.statuswin.addstr(0, (mx - len(versionstr)) / 2, versionstr, curses.A_BOLD)
     if hasattr(self, "mhps"):
       self.statuswin.addstr(2, 0, "FPGA speed: ")
@@ -187,7 +212,7 @@ class Miner(object):
       underline = 0 if y == my - 2 else curses.A_UNDERLINE
       self.statuswin.addstr(y, x, p.name.rjust(self.namelen), underline)
       y = y + 1
-    x = x + self.namelen
+    x += self.namelen
     self.statuswin.vline(4, x, curses.ACS_VLINE, my - 5)
     x = x + 1
     self.statuswin.addstr(4, x + 1, "Job")
